@@ -9,6 +9,7 @@ class HealthCheckReadinessElem(BaseModel):
         is_alive (bool): Boolean indicator of service availability
         msg (str): Detailed status message or error description
     """
+
     service: str
     is_alive: bool
     msg: str
@@ -22,4 +23,5 @@ class HealthCheckReadinessOutScheme(BaseModel):
     Attributes:
         items (list[HealthCheckReadinessElem]): Collection of service status reports
     """
+
     items: list[HealthCheckReadinessElem]
