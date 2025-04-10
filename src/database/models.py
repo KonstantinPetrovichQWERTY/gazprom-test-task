@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 import uuid
-from sqlalchemy import UUID, ForeignKey, DateTime, Float, String, Table
+from sqlalchemy import UUID, Column, ForeignKey, DateTime, Float, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -14,12 +14,12 @@ class Base(DeclarativeBase):
 user_device_association = Table(
     "user_device_association",
     Base.metadata,
-    mapped_column(
+    Column(
         "user_id", UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
-    ),  # type: ignore[arg-type]
-    mapped_column(
+    ),
+    Column(
         "device_id", UUID(as_uuid=True), ForeignKey("devices.id"), primary_key=True
-    ),  # type: ignore[arg-type]
+    ),
 )
 
 

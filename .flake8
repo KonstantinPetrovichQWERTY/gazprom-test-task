@@ -1,3 +1,3 @@
 [flake8]
-exclude = venv
+exclude = venv, src/database/alembic
 max-line-length = 88
