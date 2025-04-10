@@ -4,21 +4,27 @@ import uuid
 from sqlalchemy import UUID, ForeignKey, DateTime, Float, String, Table
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+
 class Base(DeclarativeBase):
     pass
 
 
 # I do not like this format, but it mentioned in SQLAlchemy doc.
-# https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html#many-to-many 
+# https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html#many-to-many
 user_device_association = Table(
-    'user_device_association',
+    "user_device_association",
     Base.metadata,
-    mapped_column('user_id', UUID(as_uuid=True), ForeignKey('users.id'), primary_key=True),
-    mapped_column('device_id', UUID(as_uuid=True), ForeignKey('devices.id'), primary_key=True)
+    mapped_column(
+        "user_id", UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    ),  # type: ignore[arg-type]
+    mapped_column(
+        "device_id", UUID(as_uuid=True), ForeignKey("devices.id"), primary_key=True
+    ),  # type: ignore[arg-type]
 )
 
+
 class User(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -27,14 +33,14 @@ class User(Base):
         default=uuid4,
     )
     name: Mapped[str] = mapped_column(String(255))
-    
-    devices: Mapped[list['Device']] = relationship(
-        secondary=user_device_association,
-        back_populates='users'
+
+    devices: Mapped[list["Device"]] = relationship(
+        secondary=user_device_association, back_populates="users"
     )
 
+
 class Device(Base):
-    __tablename__ = 'devices'
+    __tablename__ = "devices"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -44,18 +50,17 @@ class Device(Base):
     )
 
     serial_number: Mapped[str] = mapped_column(String(30))
-    
-    users: Mapped[list['User']] = relationship(
-        secondary=user_device_association,
-        back_populates='devices'
+
+    users: Mapped[list["User"]] = relationship(
+        secondary=user_device_association, back_populates="devices"
     )
-    measurements: Mapped[list['Measurement']] = relationship(
-        back_populates='device',
-        cascade='all, delete-orphan'
+    measurements: Mapped[list["Measurement"]] = relationship(
+        back_populates="device", cascade="all, delete-orphan"
     )
 
+
 class Measurement(Base):
-    __tablename__ = 'measurements'
+    __tablename__ = "measurements"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -64,13 +69,11 @@ class Measurement(Base):
         default=uuid4,
     )
     device_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey('devices.id'),
-        index=True
+        UUID(as_uuid=True), ForeignKey("devices.id"), index=True
     )
     timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     z: Mapped[float] = mapped_column(Float)
 
-    device: Mapped['Device'] = relationship(back_populates='measurements')
+    device: Mapped["Device"] = relationship(back_populates="measurements")
