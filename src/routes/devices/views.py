@@ -10,7 +10,10 @@ from src.database.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Device, Measurement, User
+from src.routes.devices.dao import dao
+from src.routes.devices.exceptions import DeviceNotFoundException, DeviceSerialNumberException, MeasurementNotFoundException
 from src.routes.devices.schemas import DeviceSchema, DeviceStatsResponse, DeviceWithUsersSchema, MeasurementCreateSchema, MeasurementSchema, PartialDeviceSchema
+from src.routes.users.exceptions import UserAlreadyExistException, UserNotFoundException
 from src.routes.users.schemas import UserSchema
 
 
@@ -31,22 +34,17 @@ async def register_new_device(
 
     logger.info("register_new_device: started", device_data=device_data.model_dump())
 
-    # new_coil = await dao.register_new_device(session=session, device_data=device_data)
-    existing_device = await session.execute(
-        select(Device).where(Device.serial_number == device_data.serial_number))
-    if existing_device.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Device with this serial number already exists"
+    try:
+        new_device = await dao.register_new_device(session=session, device_data=device_data)
+    except DeviceSerialNumberException as e:
+        logger.warning(
+            "register_new_device: Device with such serial number already exists",
+            serial_number=device_data.serial_number,
         )
-    
-    new_device = Device(
-        serial_number=device_data.serial_number,
-    )
-
-    session.add(new_device)
-    await session.commit()
-    await session.refresh(new_device)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=e.message,
+        )
 
     logger.info("register_new_device: completed", device_id=new_device.id)
     return new_device
@@ -60,8 +58,20 @@ async def get_all_devices(
     session: AsyncSession = Depends(get_db)
 ):
     """Get list of all devices with pagination"""
-    result = await session.execute(select(Device))
-    devices = result.scalars().all()
+    logger.info("get_all_devices: started")
+
+    try:
+        devices = await dao.get_all_devices(session=session)
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "get_all_devices: Devices not found"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
+
+    logger.info("get_all_devices: completed", number_of_devices=len(devices))
     return devices
 
 
@@ -74,24 +84,21 @@ async def get_device(
     session: AsyncSession = Depends(get_db)
 ):
     """Get device details by ID"""
-    stmt = (
-        select(Device)
-        .where(Device.id == device_id)
-        .options(selectinload(Device.users))
-    )
-    
-    device = (await session.scalars(stmt)).first()
-    
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
+    logger.info("get_device: started", device_id=device_id)
 
-    result = DeviceWithUsersSchema(
-        id=device.id,
-        serial_number=device.serial_number,
-        users=device.users
-    )
+    try:
+        device = await dao.get_device(session=session)
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "get_device: Device not found", device_id=device_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
 
-    return result
+    logger.info("get_device: completed", device_id=device_id)
+    return device
 
 
 @router.post(
@@ -105,23 +112,24 @@ async def add_measurement(
     session: AsyncSession = Depends(get_db)
 ):
     """Add new measurement for specific device"""
-    device = await session.get(Device, device_id)
-    if not device:
+    logger.info("add_measurement: started", device_id=device_id)
+
+    try:
+        measurement = await dao.add_measurement(
+            session=session, 
+            device_id=device_id, 
+            measurement_data=measurement_data
+        )
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "add_measurement: Device not found", device_id=device_id
+        )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Device not found"
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
         )
 
-    measurement = Measurement(
-        device_id=device_id,
-        timestamp=datetime.now(),
-        **measurement_data.model_dump()
-    )
-    
-    session.add(measurement)
-    await session.commit()
-    await session.refresh(measurement)
-
+    logger.info("add_measurement: completed",  measurement_id=measurement.id)
     return measurement
 
 
@@ -136,23 +144,25 @@ async def get_device_measurements(
     end_date: Optional[datetime] = Query(None),
 ):
     """Get measurements for device with optional date filtering"""
-    query = select(Measurement).where(Measurement.device_id == device_id)
-    
-    if start_date:
-        query = query.where(Measurement.timestamp >= start_date)
-    if end_date:
-        query = query.where(Measurement.timestamp <= end_date)
-    
-    result = await session.execute(
-        query.order_by(Measurement.timestamp.desc())
-    )
-    measurements = result.scalars().all()
+    logger.info("get_device_measurements: started", device_id=device_id)
 
-    if not measurements:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Device not found"
+    try:
+        measurements = await dao.get_device_measurements(
+            session=session, 
+            device_id=device_id, 
+            start_date=start_date,
+            end_date=end_date,
         )
+    except MeasurementNotFoundException as e:
+        logger.warning(
+            "get_device_measurements: Measurement not found"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
+
+    logger.info("get_device_measurements: completed",  number_of_measurements=len(measurements))
     return measurements
 
 
@@ -167,56 +177,34 @@ async def get_device_stats(
     end_date: Optional[datetime] = Query(None)
 ):
     """Get statistical analysis for device measurements"""
-    device = await session.get(Device, device_id)
-    if not device:
+    logger.info("get_device_stats: started", device_id=device_id)
+
+    try:
+        stats = await dao.get_device_stats(
+            device_id=device_id,
+            session=session,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "get_device_stats: Device not found", device_id=device_id
+        )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Device not found"
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
+    except MeasurementNotFoundException as e:
+        logger.warning(
+            "get_device_stats: Measurement not found"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
         )
 
-    query = select(Measurement).where(Measurement.device_id == device_id)
-    if start_date:
-        query = query.where(Measurement.timestamp >= start_date)
-    if end_date:
-        query = query.where(Measurement.timestamp <= end_date)
-
-    result = await session.execute(query)
-    measurements = result.scalars().all()
-
-    if not measurements:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No measurements found for the specified period"
-        )
-
-    x_values = [m.x for m in measurements]
-    y_values = [m.y for m in measurements]
-    z_values = [m.z for m in measurements]
-
-    def calculate_stats(values):
-        sorted_values = sorted(values)
-        count = len(sorted_values)
-        return {
-            "min": min(sorted_values),
-            "max": max(sorted_values),
-            "count": count,
-            "sum": sum(sorted_values),
-            "median": sorted_values[count // 2] if count % 2 else 
-                     (sorted_values[count // 2 - 1] + sorted_values[count // 2]) / 2
-        }
-
-    result = DeviceStatsResponse(
-        x=calculate_stats(x_values),
-        y=calculate_stats(y_values),
-        z=calculate_stats(z_values),
-        device_id=device_id,
-        period={
-            "start": start_date,
-            "end": end_date
-        }
-    )
-
-    return result
+    logger.info("get_device_stats: completed")
+    return stats
 
 
 @router.post(
@@ -230,29 +218,40 @@ async def add_user_to_device(
     session: AsyncSession = Depends(get_db)
 ):
     """Add user to device (many-to-many relationship)"""
-    device = await session.get(Device, device_id)
-    if not device:
+    logger.info("add_user_to_device: started", device_id=device_id)
+
+    try:
+        device = await dao.add_user_to_device(
+            device_id=device_id,
+            user_id=user_id,
+            session=session,
+        )
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "add_user_to_device: Device not found", device_id=device_id
+        )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Device not found"
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
+    except UserNotFoundException as e:
+        logger.warning(
+            "add_user_to_device: User not found", user_id=user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
+    except UserAlreadyExistException as e:
+        logger.warning(
+            "add_user_to_device: User already exist", user_id=user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=e.message,
         )
 
-    user = await session.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    if user in device.users:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User already assigned to this device"
-        )
-
-    device.users.append(user)
-    await session.commit()
-    await session.refresh(device)
+    logger.info("add_user_to_device: completed")
     return device
 
 @router.get(
@@ -264,17 +263,21 @@ async def get_device_users(
     session: AsyncSession = Depends(get_db)
 ):
     """Get list of users assigned to device"""
-    stmt = (
-        select(Device)
-        .where(Device.id == device_id)
-        .options(selectinload(Device.users))
-    )
-    
-    device = (await session.scalars(stmt)).first()
-    
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
+    logger.info("get_device_users: started", device_id=device_id)
 
-    result = [UserSchema(id=user.id, name=user.name) for user in device.users]
+    try:
+        device = await dao.get_device_users(
+            session=session,
+            device_id=device_id,
+        )
+    except DeviceNotFoundException as e:
+        logger.warning(
+            "get_device_users: Device not found", device_id=device_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message,
+        )
 
-    return result
+    logger.info("get_device_users: completed")
+    return device

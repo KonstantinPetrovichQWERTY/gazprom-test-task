@@ -14,3 +14,13 @@ class DeviceNotFoundException(Exception):
         self.message = message
         super().__init__(self.message)
 
+class MeasurementNotFoundException(Exception):
+    def __init__(self, message: str = "Measurement not found"):
+        self.message = message
+        super().__init__(self.message)
+
+class DeviceSerialNumberException(Exception):
+    def __init__(self, message: str = "Device with this serial number already exists"):
+        self.message = message
+        super().__init__(self.message)
+
