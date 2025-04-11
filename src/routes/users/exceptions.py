@@ -5,6 +5,6 @@ class UserNotFoundException(Exception):
 
 
 class UserAlreadyExistException(Exception):
-    def __init__(self, message: str = "User of this device already exists"):
+    def __init__(self, message: str = "User already exists"):
         self.message = message
         super().__init__(self.message)

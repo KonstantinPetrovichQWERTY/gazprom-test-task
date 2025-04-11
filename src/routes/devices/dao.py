@@ -212,7 +212,13 @@ class DevicePostgreDAO(DeviceDataStorage):
         device_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> DeviceWithUsersSchema:
-        device = await session.get(Device, device_id)
+        stmt = (
+            select(Device)
+            .where(Device.id == device_id)
+            .options(selectinload(Device.users))
+        )
+        device = (await session.execute(stmt)).scalar_one_or_none()
+
         if not device:
             raise DeviceNotFoundException()
 
@@ -227,13 +233,11 @@ class DevicePostgreDAO(DeviceDataStorage):
         await session.commit()
         await session.refresh(device)
 
-        result = DeviceWithUsersSchema(
+        return DeviceWithUsersSchema(
             serial_number=device.serial_number,
             id=device.id,
             users=[UserSchema(name=user.name, id=user.id) for user in device.users],
         )
-
-        return result
 
     async def get_device_users(
         self,

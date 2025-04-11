@@ -1,8 +1,9 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Dict, Optional, List
 import uuid
 
-from src.routes.devices.schemas import DeviceSchema
+from src.routes.devices.schemas import DeviceSchema, StatsValues
 
 
 class PartialUserSchema(BaseModel):
@@ -22,3 +23,24 @@ class UserUpdateSchema(BaseModel):
 
 class UserWithDevicesSchema(FullUserSchema):
     devices: List[DeviceSchema] = []
+
+
+class UserAggregatedStatsResponse(BaseModel):
+    user_id: uuid.UUID
+    total_devices: int
+    total_measurements: int
+    period: Dict[str, Optional[datetime]]
+    stats: Dict[str, StatsValues]
+
+
+class UserDeviceStatsResponse(BaseModel):
+    user_id: uuid.UUID
+    total_devices: int
+    total_measurements: int
+    period: Dict[str, Optional[datetime]]
+    devices: List["DeviceStats"]
+
+
+class DeviceStats(BaseModel):
+    device_id: uuid.UUID
+    stats: Dict[str, StatsValues]
