@@ -4,8 +4,15 @@ from typing import List, Optional
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.routes.devices.schemas import DeviceSchema, DeviceStatsResponse, DeviceWithUsersSchema, MeasurementCreateSchema, MeasurementSchema, PartialDeviceSchema
-from src.routes.users.schemas import UserSchema
+from src.routes.devices.schemas import (
+    DeviceSchema,
+    DeviceStatsResponse,
+    DeviceWithUsersSchema,
+    MeasurementCreateSchema,
+    MeasurementSchema,
+    PartialDeviceSchema,
+    UserSchema,
+)
 
 
 class DeviceDataStorage(ABC):
@@ -13,6 +20,7 @@ class DeviceDataStorage(ABC):
 
     @abstractmethod
     async def get_device(
+        self,
         session: AsyncSession,
         device_id: uuid.UUID,
     ) -> DeviceWithUsersSchema:
@@ -29,9 +37,10 @@ class DeviceDataStorage(ABC):
 
     @abstractmethod
     async def register_new_device(
+        self,
         session: AsyncSession,
         device_data: PartialDeviceSchema,
-    )-> DeviceSchema:
+    ) -> DeviceSchema:
         """Create a new device record in the database.
 
         Args:
@@ -44,14 +53,12 @@ class DeviceDataStorage(ABC):
         pass
 
     @abstractmethod
-    async def get_all_devices(
-        session: AsyncSession
-    ) -> list[DeviceSchema]:
+    async def get_all_devices(self, session: AsyncSession) -> list[DeviceSchema]:
         """Retrieve devices.
 
         Args:
             session (AsyncSession): Asynchronous database session
-            
+
         Returns:
             list[DeviceSchema]: List of devices
         """
@@ -59,6 +66,7 @@ class DeviceDataStorage(ABC):
 
     @abstractmethod
     async def get_device_stats(
+        self,
         session: AsyncSession,
         device_id: uuid.UUID,
         start_date: Optional[datetime],

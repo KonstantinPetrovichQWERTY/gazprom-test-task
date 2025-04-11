@@ -8,15 +8,27 @@ from sqlalchemy.orm import selectinload
 
 from src.database.models import Device, Measurement, User
 from src.routes.devices.abstract_data_storage import DeviceDataStorage
-from src.routes.devices.exceptions import DeviceNotFoundException, MeasurementNotFoundException, DeviceSerialNumberException
-from src.routes.devices.schemas import DeviceSchema, DeviceStatsResponse, DeviceWithUsersSchema, MeasurementCreateSchema, MeasurementSchema, PartialDeviceSchema
+from src.routes.devices.exceptions import (
+    DeviceNotFoundException,
+    MeasurementNotFoundException,
+    DeviceSerialNumberException,
+)
+from src.routes.devices.schemas import (
+    DeviceSchema,
+    DeviceStatsResponse,
+    DeviceWithUsersSchema,
+    MeasurementCreateSchema,
+    MeasurementSchema,
+    PartialDeviceSchema,
+    UserSchema,
+)
 from src.routes.users.exceptions import UserAlreadyExistException, UserNotFoundException
-from src.routes.users.schemas import UserSchema
 
 
 class DevicePostgreDAO(DeviceDataStorage):
-    
+
     async def get_device(
+        self,
         session: AsyncSession,
         device_id: uuid.UUID,
     ) -> DeviceWithUsersSchema:
@@ -25,26 +37,26 @@ class DevicePostgreDAO(DeviceDataStorage):
             .where(Device.id == device_id)
             .options(selectinload(Device.users))
         )
-        
+
         device = (await session.scalars(stmt)).first()
-        
+
         if not device:
             raise DeviceNotFoundException()
 
         result = DeviceWithUsersSchema(
             id=device.id,
             serial_number=device.serial_number,
-            users=device.users
+            users=[UserSchema(name=user.name, id=user.id) for user in device.users]
         )
 
         return result
 
-
     async def register_new_device(
+        self,
         session: AsyncSession,
         device_data: PartialDeviceSchema,
-    )-> DeviceSchema:
-        
+    ) -> DeviceSchema:
+
         existing_device = await session.execute(
             select(Device).where(Device.serial_number == device_data.serial_number)
         )
@@ -66,29 +78,27 @@ class DevicePostgreDAO(DeviceDataStorage):
 
         return result
 
-
-    async def get_all_devices(
-        session: AsyncSession
-    ) -> list[DeviceSchema]:
+    async def get_all_devices(self, session: AsyncSession) -> list[DeviceSchema]:
         result = await session.execute(select(Device))
         devices = result.scalars().all()
-        
+
         if not devices:
             raise DeviceNotFoundException()
-        
-        result = [DeviceSchema(id=device.id, serial_number=device.serial_number) for device in devices]
 
-        return result
-
+        return [
+            DeviceSchema(id=device.id, serial_number=device.serial_number)
+            for device in devices
+        ]
 
     async def get_device_stats(
+        self,
         session: AsyncSession,
         device_id: uuid.UUID,
         start_date: Optional[datetime],
         end_date: Optional[datetime],
     ) -> DeviceStatsResponse:
         device = await session.get(Device, device_id)
-        
+
         if not device:
             raise DeviceNotFoundException()
 
@@ -116,23 +126,20 @@ class DevicePostgreDAO(DeviceDataStorage):
                 "max": max(sorted_values),
                 "count": count,
                 "sum": sum(sorted_values),
-                "median": sorted_values[count // 2] if count % 2 else 
-                        (sorted_values[count // 2 - 1] + sorted_values[count // 2]) / 2
+                "median": (
+                    sorted_values[count // 2]
+                    if count % 2
+                    else (sorted_values[count // 2 - 1] + sorted_values[count // 2]) / 2
+                ),
             }
 
-        result = DeviceStatsResponse(
+        return DeviceStatsResponse(
             x=calculate_stats(x_values),
             y=calculate_stats(y_values),
             z=calculate_stats(z_values),
             device_id=device_id,
-            period={
-                "start": start_date,
-                "end": end_date
-            }
+            period={"start": start_date, "end": end_date},
         )
-
-        return result
-
 
     async def add_measurement(
         self,
@@ -142,16 +149,16 @@ class DevicePostgreDAO(DeviceDataStorage):
     ) -> MeasurementSchema:
 
         device = await session.get(Device, device_id)
-        
+
         if not device:
             raise DeviceNotFoundException()
 
         measurement = Measurement(
             device_id=device_id,
             timestamp=datetime.now(),
-            **measurement_data.model_dump()
+            **measurement_data.model_dump(),
         )
-        
+
         session.add(measurement)
         await session.commit()
         await session.refresh(measurement)
@@ -167,7 +174,6 @@ class DevicePostgreDAO(DeviceDataStorage):
 
         return result
 
-
     async def get_device_measurements(
         self,
         session: AsyncSession,
@@ -176,21 +182,19 @@ class DevicePostgreDAO(DeviceDataStorage):
         end_date: Optional[datetime],
     ) -> List[MeasurementSchema]:
         query = select(Measurement).where(Measurement.device_id == device_id)
-        
+
         if start_date:
             query = query.where(Measurement.timestamp >= start_date)
         if end_date:
             query = query.where(Measurement.timestamp <= end_date)
-        
-        result = await session.execute(
-            query.order_by(Measurement.timestamp.desc())
-        )
+
+        result = await session.execute(query.order_by(Measurement.timestamp.desc()))
         measurements = result.scalars().all()
 
         if not measurements:
             raise MeasurementNotFoundException()
 
-        result = [
+        return [
             MeasurementSchema(
                 x=measurement.x,
                 y=measurement.y,
@@ -198,11 +202,9 @@ class DevicePostgreDAO(DeviceDataStorage):
                 id=measurement.id,
                 device_id=measurement.device_id,
                 timestamp=measurement.timestamp,
-            ) for measurement in measurements
+            )
+            for measurement in measurements
         ]
-        
-        return result
-
 
     async def add_user_to_device(
         self,
@@ -228,11 +230,10 @@ class DevicePostgreDAO(DeviceDataStorage):
         result = DeviceWithUsersSchema(
             serial_number=device.serial_number,
             id=device.id,
-            users=device.users,
+            users=[UserSchema(name=user.name, id=user.id) for user in device.users],
         )
 
         return result
-
 
     async def get_device_users(
         self,
@@ -244,9 +245,9 @@ class DevicePostgreDAO(DeviceDataStorage):
             .where(Device.id == device_id)
             .options(selectinload(Device.users))
         )
-        
+
         device = (await session.scalars(stmt)).first()
-        
+
         if not device:
             raise DeviceNotFoundException()
 

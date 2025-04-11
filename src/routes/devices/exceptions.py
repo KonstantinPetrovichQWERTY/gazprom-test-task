@@ -10,17 +10,19 @@ class DeviceNotFoundException(Exception):
         message (str): Human-readable error description. Defaults to
             "Device not found" if not provided explicitly.
     """
+
     def __init__(self, message: str = "Coil not found"):
         self.message = message
         super().__init__(self.message)
+
 
 class MeasurementNotFoundException(Exception):
     def __init__(self, message: str = "Measurement not found"):
         self.message = message
         super().__init__(self.message)
 
+
 class DeviceSerialNumberException(Exception):
     def __init__(self, message: str = "Device with this serial number already exists"):
         self.message = message
         super().__init__(self.message)
-
