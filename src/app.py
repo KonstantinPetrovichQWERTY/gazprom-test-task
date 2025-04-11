@@ -8,6 +8,8 @@ from src.utils import get_service_name
 from src.version import __version__
 from src.settings import settings
 from src.routes.healthchecks.views import router as health_router
+from src.routes.devices.views import router as devices_router
+from src.routes.users.views import router as users_router
 from src.database.database import sessionmanager
 
 
@@ -53,6 +55,8 @@ def create_app(init_db: bool = True) -> FastAPI:
     configure_logging()
     app.middleware("http")(logging_middleware)
 
+    app.include_router(users_router)
+    app.include_router(devices_router)
     app.include_router(health_router)
 
     return app

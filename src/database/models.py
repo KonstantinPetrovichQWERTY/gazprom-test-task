@@ -49,7 +49,7 @@ class Device(Base):
         default=uuid4,
     )
 
-    serial_number: Mapped[str] = mapped_column(String(30))
+    serial_number: Mapped[str] = mapped_column(String(30), unique=True)
 
     users: Mapped[list["User"]] = relationship(
         secondary=user_device_association, back_populates="devices"
