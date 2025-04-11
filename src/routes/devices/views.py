@@ -10,7 +10,8 @@ from src.database.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Device, Measurement, User
-from src.routes.devices.schemas import DeviceSchema, DeviceStatsResponse, DeviceWithUsersSchema, MeasurementCreateSchema, MeasurementSchema, PartialDeviceSchema, UserSchema
+from src.routes.devices.schemas import DeviceSchema, DeviceStatsResponse, DeviceWithUsersSchema, MeasurementCreateSchema, MeasurementSchema, PartialDeviceSchema
+from src.routes.users.schemas import UserSchema
 
 
 router = APIRouter(tags=["devices"])
@@ -73,13 +74,6 @@ async def get_device(
     session: AsyncSession = Depends(get_db)
 ):
     """Get device details by ID"""
-    # device = await session.get(Device, device_id)
-    # if not device:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_404_NOT_FOUND,
-    #         detail="Device not found"
-    #     )
-
     stmt = (
         select(Device)
         .where(Device.id == device_id)

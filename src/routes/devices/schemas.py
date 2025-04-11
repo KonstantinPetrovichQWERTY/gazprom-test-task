@@ -3,6 +3,8 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel, Field
 
+from src.routes.users.schemas import UserSchema
+
 class PartialDeviceSchema(BaseModel):
     """Base schema for device creation."""
     serial_number: str = Field(..., min_length=3, max_length=30)
@@ -20,11 +22,13 @@ class DeviceSchema(PartialDeviceSchema):
         from_attributes = True
 
 class MeasurementCreateSchema(BaseModel):
+    """Schema for creating new measurement records."""
     x: float
     y: float
     z: float
 
 class MeasurementSchema(MeasurementCreateSchema):
+    """Complete measurement record including metadata."""
     id: uuid.UUID
     device_id: uuid.UUID
     timestamp: datetime
@@ -33,6 +37,7 @@ class MeasurementSchema(MeasurementCreateSchema):
         from_attributes = True
 
 class StatsValues(BaseModel):
+    """Statistical summary for a set of measurement values."""
     min: float
     max: float
     count: int
@@ -40,18 +45,13 @@ class StatsValues(BaseModel):
     median: float
 
 class DeviceStatsResponse(BaseModel):
+    """Comprehensive statistical analysis for a device's measurements."""
     device_id: uuid.UUID
     x: StatsValues
     y: StatsValues
     z: StatsValues
     period: dict[str, Optional[datetime]]
 
-class UserSchema(BaseModel):
-    id: uuid.UUID
-    name: str
-
-    class Config:
-        from_attributes = True
-
 class DeviceWithUsersSchema(DeviceSchema):
+    """Extended device information including associated users."""
     users: List[UserSchema] = []
